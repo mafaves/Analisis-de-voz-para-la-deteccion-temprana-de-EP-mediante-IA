@@ -1,0 +1,24 @@
+# Core libraries
+numpy
+pandas
+matplotlib
+
+# Audio processing
+librosa==0.9.2
+sox
+IPython
+spafe
+
+# Machine learning and PyTorch
+torch
+torchaudio
+torchinfo
+scikit-learn
+keras_tuner
+
+# Pretrained model utilities
+timm==0.4.5
+efficientnet_pytorch
+
+# Utility for downloading files
+wget
