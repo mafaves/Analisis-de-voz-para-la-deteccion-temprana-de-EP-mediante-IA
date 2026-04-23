@@ -49,7 +49,7 @@ def oversample_minority(X, y, patient_ids=None, random_state=42):
     max_count = counts.max()
     target_counts = {c: max_count for c in classes}
 
-    X_resampled = [X[y == classes[0]]
+    X_resampled = [X[y == classes[0]]]
     y_resampled = [y[y == classes[0]]]
     ids_resampled = [patient_ids[y == classes[0]]] if patient_ids is not None else [None]
 
