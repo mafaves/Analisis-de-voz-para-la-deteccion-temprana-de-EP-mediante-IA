@@ -140,9 +140,11 @@ class SklearnTrainer:
                 'best_params': best_params
             }
 
-            for k, v in metrics.items():
-                if k not in ['best_params']:
-                    all_metrics[k].append(v)
+            # for k, v in metrics.items():
+            #     if k not in ['best_params']:
+            #         all_metrics[k].append(v)
+            for k in all_metrics:
+                all_metrics[k].append(metrics[k])
 
             fold_results.append(metrics)
 
