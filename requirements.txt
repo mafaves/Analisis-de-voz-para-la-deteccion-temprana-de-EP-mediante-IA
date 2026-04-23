@@ -9,7 +9,7 @@ sox
 IPython
 spafe
 opensmile
-parselmouth
+praat-parselmouth
 
 # Machine learning and PyTorch
 torch
