@@ -107,7 +107,7 @@ class SklearnTrainer:
                     self.param_grid,
                     cv=inner_cv.split(X_train, y_train, patient_ids[train_idx]),
                     scoring=self.scoring,
-                    n_jobs=-1
+                    n_jobs=15
                 )
                 grid.fit(X_train, y_train)
                 model = grid.best_estimator_
