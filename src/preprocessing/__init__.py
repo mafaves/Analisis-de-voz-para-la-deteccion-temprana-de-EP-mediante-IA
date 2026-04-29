@@ -1,2 +1,2 @@
-from .audio_processor import process_and_split_audio, execute_preprocess_and_split
+from .audio_processor import process_and_split_audio, execute_preprocess_and_split, get_unique_exercises
 from .splitter import split_by_patients
