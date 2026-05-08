@@ -3,14 +3,18 @@ import numpy as np
 import glob
 
 
-def load_preprocessed_data(processed_folder, pattern_type='*.npy', exercise_names=None):
+def load_preprocessed_data(processed_folder, pattern_type='audio_segments_5s_with_1s_overlap_*.npy', exercise_names=None):
     """
     Load all pre-processed audio data from the saved numpy files.
     
     Args:
         processed_folder (str): Path to the folder containing pre-processed data
                                 (e.g., '/path/to/data/processed')
-        pattern_type (str): Type of files to load (default: '*.npy')
+        pattern_type (str): Glob pattern for audio segment files. 
+                           Examples: 
+                           - 'audio_segments_5s_with_1s_overlap_*.npy'
+                           - 'audio_segments_10s_with_no_overlap_*.npy'
+                           - 'audio_segments_*.npy'
         exercise_names (list, optional): Specific exercises to load. If None, loads all.
                                           Examples: ['aueoi', 'ka', 'pa', 'habla libre', etc.]
     
@@ -33,25 +37,29 @@ def load_preprocessed_data(processed_folder, pattern_type='*.npy', exercise_name
     audio_files = sorted(glob.glob(pattern))
     
     if not audio_files:
-        print(f"No pre-processed files found in {processed_folder}")
+        print(f"No pre-processed files found in {processed_folder} with pattern: {pattern_type}")
         return data
     
+    # Extract the prefix from pattern_type to use for building other file paths
+    # e.g., 'audio_segments_5s_with_1s_overlap_*.npy' -> 'audio_segments_5s_with_1s_overlap_'
+    prefix = pattern_type.split('*')[0]  # Everything before the *
+    
     for audio_file in audio_files:
-        # Extract exercise name from filename
+        # Extract exercise name from filename using the prefix
         # e.g., 'audio_segments_5s_with_1s_overlap_aueoi.npy' -> 'aueoi'
         filename = os.path.basename(audio_file)
-        exercise_name = filename.replace(pattern_type, '').replace('.npy', '')
+        exercise_name = filename.replace(prefix, '').replace('.npy', '')
         
         # Filter by exercise_names if specified
         if exercise_names and exercise_name not in exercise_names:
             continue
         
         try:
-            # Load all associated files for this exercise
+            # Load all associated files for this exercise using the same prefix
             audio_segments = np.load(audio_file)
-            labels = np.load(os.path.join(processed_folder, f'labels_5s_with_1s_overlap_{exercise_name}.npy'))
-            patient_ids = np.load(os.path.join(processed_folder, f'patient_ids_5s_with_1s_overlap_{exercise_name}.npy'))
-            exercises = np.load(os.path.join(processed_folder, f'exercises_5s_with_1s_overlap_{exercise_name}.npy'))
+            labels = np.load(os.path.join(processed_folder, f'{prefix.replace("audio_segments_", "labels_")}{exercise_name}.npy'))
+            patient_ids = np.load(os.path.join(processed_folder, f'{prefix.replace("audio_segments_", "patient_ids_")}{exercise_name}.npy'))
+            exercises = np.load(os.path.join(processed_folder, f'{prefix.replace("audio_segments_", "exercises_")}{exercise_name}.npy'))
             
             data[exercise_name] = {
                 'audio_segments': audio_segments,
@@ -100,14 +108,23 @@ def combine_preprocessed_data(data_dict):
     return combined
 
 
-# Quick usage example
+# Quick usage examples
 if __name__ == "__main__":
-    # Load all pre-processed data
     processed_folder = '/home/marcos/Documentos/GitHub/TFM_code/data/processed'
-    data = load_preprocessed_data(processed_folder)
     
-    # Or load specific exercises only
-    # data = load_preprocessed_data(processed_folder, exercise_names=['aueoi', 'ka', 'pa'])
+    # Example 1: Load with default pattern (5s with 1s overlap)
+    # data = load_preprocessed_data(processed_folder)
+    
+    # Example 2: Load with 10s chunks, no overlap
+    # data = load_preprocessed_data(processed_folder, pattern_type='audio_segments_10s_with_no_overlap_*.npy')
+    
+    # Example 3: Load with custom pattern
+    # data = load_preprocessed_data(processed_folder, pattern_type='audio_segments_custom_*.npy')
+    
+    # Example 4: Load only specific exercises
+    # data = load_preprocessed_data(processed_folder, 
+    #                                pattern_type='audio_segments_5s_with_1s_overlap_*.npy',
+    #                                exercise_names=['aueoi', 'ka', 'pa'])
     
     # Combine them into one dataset
-    combined = combine_preprocessed_data(data)
+    # combined = combine_preprocessed_data(data)
