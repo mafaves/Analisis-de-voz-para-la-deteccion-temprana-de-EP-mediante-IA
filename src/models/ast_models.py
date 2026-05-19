@@ -10,7 +10,8 @@ import torch.nn as nn
 from torch.amp import autocast
 import os
 import wget
-os.environ['TORCH_HOME'] = '../../pretrained_models'
+# os.environ['TORCH_HOME'] = '/../pretrained_models'
+os.environ['TORCH_HOME'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'pretrained_models')
 import timm
 from timm.models.layers import to_2tuple,trunc_normal_
 
@@ -96,15 +97,25 @@ class ASTModel(nn.Module):
     """
     def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024,
                  imagenet_pretrain=True, audioset_pretrain=False, model_size='base384', verbose=True,
-                 dropout_type="traditional", mlp_dropout_p=0.2, attention_dropout_p=0.2):
+                 dropout_type="traditional", mlp_dropout_p=0.2, attention_dropout_p=0.2,
+                 pretrained_models_path=None):
         
         """
         dropout_type: 'traditional' or 'attention'
         dropout_p: dropout probability
+        pretrained_models_path: path to the directory containing pretrained models. If None, defaults to '../../pretrained_models' (backward compatible)
         """
         super(ASTModel, self).__init__()
         assert timm.__version__ == '0.4.5', 'Please use timm == 0.4.5, the code might not be compatible with newer versions.'
         
+        # Handle pretrained models path (backward compatibility)
+        if pretrained_models_path is None:
+            pretrained_models_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'pretrained_models')
+        
+        # Create directory if it doesn't exist
+        os.makedirs(pretrained_models_path, exist_ok=True)
+        
+        self.pretrained_models_path = pretrained_models_path
         self.dropout_type = dropout_type
         self.attention_dropout_p = attention_dropout_p
 
@@ -181,11 +192,12 @@ class ASTModel(nn.Module):
             if model_size != 'base384':
                 raise ValueError('currently only has base384 AudioSet pretrained model.')
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            if os.path.exists('../../pretrained_models/audioset_10_10_0.4593.pth') == False:
+            audioset_model_path = os.path.join(self.pretrained_models_path, 'audioset_10_10_0.4593.pth')
+            if os.path.exists(audioset_model_path) == False:
                 # this model performs 0.4593 mAP on the audioset eval set
                 audioset_mdl_url = 'https://www.dropbox.com/s/cv4knew8mvbrnvq/audioset_0.4593.pth?dl=1'
-                wget.download(audioset_mdl_url, out='../../pretrained_models/audioset_10_10_0.4593.pth')
-            sd = torch.load('../../pretrained_models/audioset_10_10_0.4593.pth', map_location=device, weights_only=True)
+                wget.download(audioset_mdl_url, out=audioset_model_path)
+            sd = torch.load(audioset_model_path, map_location=device, weights_only=True)
             audio_model = ASTModel(label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=False, audioset_pretrain=False, model_size='base384', verbose=False) # "blank" model to load pretrained weights into
             audio_model = torch.nn.DataParallel(audio_model) 
             audio_model.load_state_dict(sd, strict=False) # Load the state dictionary

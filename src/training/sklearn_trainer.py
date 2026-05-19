@@ -105,7 +105,8 @@ class SklearnTrainer:
         exercise='default',
         feature_type='default',
         save_dir=None,
-        verbose=True
+        verbose=True,
+        test_data=None
     ):
         """
         Train model with nested cross-validation.
@@ -118,6 +119,9 @@ class SklearnTrainer:
             feature_type (str): Feature type for file organization.
             save_dir (str, optional): Base directory to save results.
             verbose (bool): Print progress.
+            test_data (tuple, optional): (X_external, y_external, patient_ids_external)
+                External patients (e.g., AC group) to test on each fold.
+                Useful for seeing how ambiguous patients are classified.
 
         Returns:
             dict: Training results with segment and patient-level metrics.
@@ -254,16 +258,20 @@ class SklearnTrainer:
             # Segment-wise predictions
             y_pred = model.predict(X_test)
 
+            # Determine threshold: 0 for decision_function, 0.5 for probabilities
             if hasattr(model, 'predict_proba'):
                 y_prob = model.predict_proba(X_test)
                 if y_prob.ndim > 1 and y_prob.shape[1] > 1:
                     y_scores = y_prob[:, 1]
                 else:
                     y_scores = y_prob.ravel()
+                threshold = 0.5
             elif hasattr(model, 'decision_function'):
                 y_scores = model.decision_function(X_test)
+                threshold = 0
             else:
                 y_scores = y_pred
+                threshold = 0.5
 
             seg_cm = confusion_matrix(y_test, y_pred)
             seg_specificity = self._compute_specificity(seg_cm)
@@ -288,7 +296,8 @@ class SklearnTrainer:
 
             # Patient-wise predictions
             patient_true, patient_pred, patient_scores = self._aggregate_patient_predictions(
-                patient_ids[test_indices], y_test, y_scores
+                patient_ids[test_indices], y_test, y_scores,
+                threshold=threshold
             )
 
             pat_cm = confusion_matrix(patient_true, patient_pred)
@@ -318,6 +327,71 @@ class SklearnTrainer:
                 print(f"  Patient-level - Acc: {patient_metrics['accuracy']:.3f}, "
                       f"AUC: {patient_metrics['auc']:.3f}")
 
+            # ==========================================
+            # Test external patients (e.g., AC group)
+            # ==========================================
+            test_external_results = None
+            if test_data is not None:
+                X_test_ext, y_test_ext, patient_ids_ext = test_data
+
+                if self.scale_features:
+                    X_test_ext_scaled = scaler.transform(X_test_ext)
+                else:
+                    X_test_ext_scaled = X_test_ext
+
+                y_pred_ext = model.predict(X_test_ext_scaled)
+
+                if hasattr(model, 'predict_proba'):
+                    y_prob_ext = model.predict_proba(X_test_ext_scaled)
+                    if y_prob_ext.ndim > 1 and y_prob_ext.shape[1] > 1:
+                        y_scores_ext = y_prob_ext[:, 1]
+                    else:
+                        y_scores_ext = y_prob_ext.ravel()
+                elif hasattr(model, 'decision_function'):
+                    y_scores_ext = model.decision_function(X_test_ext_scaled)
+                else:
+                    y_scores_ext = y_pred_ext
+
+                # Patient-level aggregation for external
+                patient_true_ext, patient_pred_ext, patient_scores_ext = \
+                    self._aggregate_patient_predictions(
+                        patient_ids_ext, y_test_ext, y_scores_ext,
+                        threshold=threshold
+                    )
+
+                n_hc = int((patient_pred_ext == 0).sum())
+                n_pd = int((patient_pred_ext == 1).sum())
+
+                try:
+                    ext_cm = confusion_matrix(patient_true_ext, patient_pred_ext)
+                except:
+                    ext_cm = [[0, 0], [0, 0]]
+
+                try:
+                    ext_auc = roc_auc_score(patient_true_ext, patient_scores_ext)
+                except:
+                    ext_auc = None
+
+                test_external_results = {
+                    'patient_id': patient_true_ext.index.tolist(),
+                    'y_true': patient_true_ext.tolist(),
+                    'y_pred': patient_pred_ext.tolist(),
+                    'y_score': patient_scores_ext.tolist(),
+                    'n_classified_HC': n_hc,
+                    'n_classified_PD': n_pd,
+                    'accuracy': accuracy_score(patient_true_ext, patient_pred_ext) if len(patient_true_ext) > 1 else 0,
+                    'auc': ext_auc
+                }
+
+                if verbose:
+                    print(f"  {'='*32}")
+                    print(f"  External patients (AC) - Classified HC: {n_hc}/{len(patient_pred_ext)}"
+                          f" | Classified PD: {n_pd}/{len(patient_pred_ext)}")
+                    if ext_auc is not None:
+                        print(f"  External patients (AC) - Accuracy: {test_external_results['accuracy']:.3f}"
+                              f" | AUC: {ext_auc:.3f}")
+                    print(f"  {'='*32}")
+
             fold_results.append({
                 'fold': fold,
                 'best_params': best_params,
@@ -334,7 +408,8 @@ class SklearnTrainer:
                     'y_true': patient_true.values,
                     'y_pred': patient_pred.values,
                     'y_score': patient_scores.values
-                }
+                },
+                'test_external': test_external_results
             })
 
             full_segment_preds.append({
@@ -399,6 +474,7 @@ class SklearnTrainer:
 
         seg_rows = []
         pat_rows = []
+        ac_rows = []
         all_best_params = []
 
         for fr in fold_results:
@@ -424,6 +500,18 @@ class SklearnTrainer:
                     'y_score': float(pat_preds['y_score'][i])
                 })
 
+            # External test predictions (e.g., AC group)
+            test_ext = fr.get('test_external')
+            if test_ext is not None and test_ext.get('patient_id') is not None:
+                for i in range(len(test_ext['patient_id'])):
+                    ac_rows.append({
+                        'fold': fold,
+                        'patient_id': test_ext['patient_id'][i],
+                        'y_true': int(test_ext['y_true'][i]),
+                        'y_pred': int(test_ext['y_pred'][i]),
+                        'y_score': float(test_ext['y_score'][i])
+                    })
+
             all_best_params.append(fr.get('best_params', {}))
 
         pd.DataFrame(seg_rows).to_csv(
@@ -436,8 +524,41 @@ class SklearnTrainer:
             index=False
         )
 
+        if ac_rows:
+            pd.DataFrame(ac_rows).to_csv(
+                os.path.join(output_dir, 'predictions_ac.csv'),
+                index=False
+            )
+
         seg_metrics = self.results_['segment_metrics']
         pat_metrics = self.results_['patient_metrics']
+
+        # Aggregate external test results (e.g., AC group)
+        ext_accuracies = []
+        ext_aucs = []
+        ext_hc_counts = []
+        ext_pd_counts = []
+        for fr in fold_results:
+            ext = fr.get('test_external')
+            if ext:
+                if ext.get('accuracy') is not None:
+                    ext_accuracies.append(ext['accuracy'])
+                if ext.get('auc') is not None:
+                    ext_aucs.append(ext['auc'])
+                ext_hc_counts.append(ext.get('n_classified_HC', 0))
+                ext_pd_counts.append(ext.get('n_classified_PD', 0))
+
+        external_summary = {}
+        if ext_accuracies:
+            external_summary = {
+                'classified_HC_mean': float(np.mean(ext_hc_counts)),
+                'classified_PD_mean': float(np.mean(ext_pd_counts)),
+                'accuracy_mean': float(np.mean(ext_accuracies)),
+                'accuracy_std': float(np.std(ext_accuracies)),
+            }
+            if ext_aucs:
+                external_summary['auc_mean'] = float(np.mean(ext_aucs))
+                external_summary['auc_std'] = float(np.std(ext_aucs))
 
         summary = {
             'exercise': exercise,
@@ -453,6 +574,9 @@ class SklearnTrainer:
                 'std': pat_metrics['std']
             }
         }
+
+        if external_summary:
+            summary['external_test'] = external_summary
 
         with open(os.path.join(output_dir, 'metrics.json'), 'w') as f:
             json.dump(summary, f, indent=2)
@@ -502,10 +626,52 @@ class SklearnTrainer:
                     if k != 'confusion_matrix':
                         f.write(f"  {k}: {v:.3f}\n")
 
+                # External test (AC group) per fold
+                ext = fr.get('test_external')
+                if ext and ext.get('patient_id') is not None:
+                    f.write("External test (AC group):\n")
+                    f.write(f"  Classified HC: {ext['n_classified_HC']} | "
+                            f"Classified PD: {ext['n_classified_PD']}\n")
+                    f.write(f"  Accuracy: {ext['accuracy']:.3f}\n")
+                    if ext.get('auc') is not None:
+                        f.write(f"  AUC: {ext['auc']:.3f}\n")
+
+                f.write("\n")
+
+        # External test summary section in results.txt
+        has_external = any(fr.get('test_external') and fr['test_external'].get('patient_id') is not None
+                          for fr in fold_results)
+        if has_external:
+            with open(os.path.join(output_dir, 'results.txt'), 'a') as f:
+                f.write(f"{'='*60}\n")
+                f.write(f"EXTERNAL TEST (AC GROUP) - SUMMARY\n")
+                f.write(f"{'='*60}\n\n")
+
+                ext_ac_counts = []
+                ext_pd_counts = []
+                ext_accs = []
+                ext_auc_vals = []
+
+                for fr in fold_results:
+                    ext = fr.get('test_external')
+                    if ext:
+                        ext_ac_counts.append(ext['n_classified_HC'])
+                        ext_pd_counts.append(ext['n_classified_PD'])
+                        ext_accs.append(ext['accuracy'])
+                        if ext.get('auc') is not None:
+                            ext_auc_vals.append(ext['auc'])
+
+                f.write(f"Classified HC (DaTSCAN-like): {np.mean(ext_ac_counts):.1f} ± {np.std(ext_ac_counts):.1f}\n")
+                f.write(f"Classified PD (DaTSCAN-like): {np.mean(ext_pd_counts):.1f} ± {np.std(ext_pd_counts):.1f}\n")
+                f.write(f"Accuracy: {np.mean(ext_accs):.3f} ± {np.std(ext_accs):.3f}\n")
+                if ext_auc_vals:
+                    f.write(f"AUC: {np.mean(ext_auc_vals):.3f} ± {np.std(ext_auc_vals):.3f}\n")
                 f.write("\n")
 
         print(f"\nResults saved to: {output_dir}")
         print(f"  - predictions_segment_wise.csv")
         print(f"  - predictions_patient_wise.csv")
+        if ac_rows:
+            print(f"  - predictions_ac.csv")
         print(f"  - metrics.json")
         print(f"  - results.txt")
