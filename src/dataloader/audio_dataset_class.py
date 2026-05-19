@@ -145,7 +145,7 @@ class ParkinsonAudioDataset_without_GRL(Dataset):
 
 		mix_waveform = mix_lambda * audio_input + (1 - mix_lambda) * mix_audio
 
-		mix_mel = librosa.feature.melspectrogram(mix_waveform, sr=self.sr, n_fft=self.n_fft,
+		mix_mel = librosa.feature.melspectrogram(y = mix_waveform, sr=self.sr, n_fft=self.n_fft,
 												 hop_length=self.hop_length, n_mels=self.n_mels, win_length=self.win_length)
 		mix_mel_db = librosa.power_to_db(mix_mel, ref=np.max)
 		mix_mel_tensor = torch.tensor(mix_mel_db, dtype=torch.float32)
@@ -173,7 +173,7 @@ class ParkinsonAudioDataset_without_GRL(Dataset):
 		patient_id = self.patient_ids[idx]
 
 		# Convert audio to Mel-spectrogram
-		mel = librosa.feature.melspectrogram(audio, sr=self.sr, n_fft=self.n_fft,
+		mel = librosa.feature.melspectrogram(y = audio, sr=self.sr, n_fft=self.n_fft,
 											 hop_length=self.hop_length, n_mels=self.n_mels, win_length=self.win_length , window = 'hann', fmax = self.sr / 2.0)
 		mel_db = librosa.power_to_db(mel, ref=np.max)
 
