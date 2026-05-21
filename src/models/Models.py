@@ -3,7 +3,7 @@ import torch
 from .HigherModels import *
 from efficientnet_pytorch import EfficientNet
 import torchvision
-from torchvision.models import resnet50, ResNet50_Weights, efficientnet_v2_s, EfficientNet_V2_S_Weights
+from torchvision.models import resnet50, ResNet50_Weights, efficientnet_v2_s, EfficientNet_V2_S_Weights, efficientnet_v2_m, EfficientNet_V2_M_Weights, efficientnet_v2_l, EfficientNet_V2_L_Weights
 from math import floor, ceil
 
 class ResNetAttention(nn.Module):
@@ -79,8 +79,17 @@ class EffNetAttention(nn.Module):
         self.use_efficientnetv2 = use_efficientnetv2
 
         if self.use_efficientnetv2:
-            print(f'Using EfficientNetV2-{v2_model_name} from torchvision')
-            self.effnet = efficientnet_v2_s(weights=EfficientNet_V2_S_Weights.IMAGENET1K_V1)
+            if v2_model_name not in ['s', 'm', 'l']:
+                raise ValueError("Invalid EfficientNetV2 model name. Choose from 's', 'm', or 'l'.")
+            if v2_model_name == 's':
+                print(f'Using EfficientNetV2-{v2_model_name} from torchvision')
+                self.effnet = efficientnet_v2_s(weights=EfficientNet_V2_S_Weights.IMAGENET1K_V1)
+            elif v2_model_name == 'm':
+                print(f'Using EfficientNetV2-{v2_model_name} from torchvision')
+                self.effnet = efficientnet_v2_m(weights=EfficientNet_V2_M_Weights.IMAGENET1K_V1)
+            elif v2_model_name == 'l':
+                print(f'Using EfficientNetV2-{v2_model_name} from torchvision')
+                self.effnet = efficientnet_v2_l(weights=EfficientNet_V2_L_Weights.IMAGENET1K_V1) 
             self.effnet.classifier = nn.Identity()
         else:
             if pretrain == False:
