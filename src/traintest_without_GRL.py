@@ -15,8 +15,8 @@ import pandas as pd
 import shutil
 from utilities import *
 from dataloader.audio_dataset_class import *
-from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import StratifiedShuffleSplit, StratifiedGroupKFold
+from sklearn.metrics import confusion_matrix 
 
 def compute_class_weights(labels):
 	class_counts = torch.bincount(labels)
@@ -181,23 +181,43 @@ def load_best_model_and_evaluate(audio_model, exp_dir, val_loader, args, device)
 	
 	return stats, val_loss, results_df, patient_results, patient_metrics, best_epoch
 
-  
+
+def initialize_model(args):
+	"""
+	Initialize the audio model based on the provided arguments.
+	
+	Args:
+		args (dict): Configuration dictionary containing model parameters.
+	
+	Returns:
+		audio_model: Initialized PyTorch model.
+	"""
+	if args['model_type'] == 'EffNetAttention':
+		audio_model = EffNetAttention(label_dim=2, b=args['b'], pretrain=True, head_num=args['head_num'], dropout_rate=args['dropout_rate'], dropatt_rate = args['dropatt_rate'], use_efficientnetv2=args['use_efficientnetv2'], v2_model_name = args['v2_model_name'])
+	elif args['model_type'] == 'ResNetAttention':
+		audio_model = ResNetAttention(label_dim=2, pretrain=args['pretrain'], dropatt_rate = args['dropatt_rate'], dropout_rate=args['dropout_rate'])
+	# elif args['model_type'] == 'ASTModel':
+	# 	audio_model = ASTModel(label_dim=2,fstride=10, tstride=10, input_fdim=128, input_tdim=313, imagenet_pretrain=args['pretrain'], audioset_pretrain=args['pretrain'],  dropout_type="attention", mlp_dropout_p=args['dropout_rate'], attention_dropout_p=args['dropout_rate'], pretrained_models_path="/home/marcos/Documentos/GitHub/TFM_code/pretrained_models")
+	
+	return audio_model
+
 # Training function with validation
 def train_without_GRL(audio_model, train_loader, val_loader, args):
 
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	print('Running on ' + str(device))
+	print('\nRunning on ' + str(device))
+	
 	# Create or clear the experiment directory
 	exp_dir = args['exp_dir']
 	CV=args['CV']
 	if os.path.exists(exp_dir) and CV==False :
 		# Clear the directory
-		print("Removing existing files from directory ", exp_dir)
+		print("Removing existing files from directory: ", exp_dir)
 		shutil.rmtree(exp_dir)
         
 	elif not os.path.exists(exp_dir) and CV == False:
 		# Create the directory
-		print("Creating directory ", exp_dir)
+		print("Creating directory: ", exp_dir)
 		os.makedirs(exp_dir)
 
 	torch.set_grad_enabled(True)
@@ -235,7 +255,8 @@ def train_without_GRL(audio_model, train_loader, val_loader, args):
 	# For mixed precision training
 	scaler = torch.amp.GradScaler()
 
-	print("Starting training without GRL...")
+	print("Starting training...")
+	print(f"Experiment directory: {exp_dir}")
 	audio_model.train()
 
 	# Lists to store metrics for plotting
@@ -366,7 +387,7 @@ def train_without_GRL(audio_model, train_loader, val_loader, args):
 
 		# Print training and validation metrics
 		print(f"Epoch {epoch + 1}/{args['n_epochs']} - Training Loss: {loss_meter.avg:.4f} - Training acc: {train_acc:.3f}, Training PW acc: {patient_metric_acc:.3f}, "
-			  f"Val Loss: {val_loss_epoch:.4f}, Val acc: {test_acc:.3f}, Test PW acc: {test_pm_acc:.3f}, Training time: {time.time() - begin_time:.3f}s")
+			  f"Val Loss: {val_loss_epoch:.4f}, Val acc: {test_acc:.3f}, Test PW acc: {test_pm_acc:.3f}, Training time: {time.time() - begin_time:.1f}s")
 
 		# Build epoch metrics dictionary for best model tracking
 		epoch_metrics = {
@@ -420,6 +441,10 @@ def train_without_GRL(audio_model, train_loader, val_loader, args):
 	if CV==False:
 		save_experiment_results(exp_dir=args['exp_dir'], train_loss=train_loss, val_loss=val_loss, train_aucs=train_aucs, val_aucs=val_aucs, results_df=results_df, patient_results=patient_results, patient_metrics=patient_metrics, audio_model=audio_model, optimizer=optimizer, args=args, best_epoch=best_model_epoch if args.get('save_best_model', False) else -1
 	)
+	
+	final_time = time.time() - start_time
+	print(f"\nTraining completed in {final_time/60:.2f} minutes")
+	
 	return stats, val_loss, val_aucs, results_df, patient_results, patient_metrics, train_aucs, train_loss, best_model_epoch
 
 
@@ -504,7 +529,7 @@ def validate_without_GRL(audio_model, val_loader, args):
 
 
 def cross_validate_and_save(
-    audio_segments, labels_np, patient_ids, args, audio_model, audio_segments_AC, labels_AC, patient_ids_AC, 
+    audio_segments, labels_np, patient_ids, args, audio_segments_AC, labels_AC, patient_ids_AC, 
 ):
     """
     Perform cross-validation, train the model for each fold, and save results.
@@ -514,19 +539,26 @@ def cross_validate_and_save(
         labels_np (ndarray): Labels (y).
         patient_ids (ndarray): Patient IDs for group-based splitting.
         args (dict): Experiment arguments.
-        train_fn (function): Function to train the model.
-        validate_fn (function): Function to validate the model.
+        audio_model (nn.Module): The audio model to train and validate.
+        audio_segments_AC (ndarray): Audio features for AC dataset.
+        labels_AC (ndarray): Labels for AC dataset.
+        patient_ids_AC (ndarray): Patient IDs for AC dataset.
     """
 
-    # Step 1: Create a mapping of patient IDs to their diagnosis (PD = 1, HC = 0)
-    patient_label_map = {}
-    for patient_id, label in zip(patient_ids, labels_np):
-        if patient_id not in patient_label_map:
-            patient_label_map[patient_id] = label  # Assign the first encountered label (assume consistent labels)
+    # # Step 1: Create a mapping of patient IDs to their diagnosis (PD = 1, HC = 0)
+    # patient_label_map = {}
+    # for patient_id, label in zip(patient_ids, labels_np):
+    #     if patient_id not in patient_label_map:
+    #         patient_label_map[patient_id] = label  # Assign the first encountered label (assume consistent labels)
 
-    # Step 2: Extract unique patients and their corresponding labels
-    unique_patients = np.array(list(patient_label_map.keys()))  # Unique patient IDs
-    patient_labels = np.array([patient_label_map[pid] for pid in unique_patients])  # PD = 1, HC = 0
+    # # Step 2: Extract unique patients and their corresponding labels
+    # unique_patients = np.array(list(patient_label_map.keys()))  # Unique patient IDs
+    # patient_labels = np.array([patient_label_map[pid] for pid in unique_patients])  # PD = 1, HC = 0
+
+	# Full arrays
+    X = np.array(audio_segments)
+    y = np.array(labels_np)
+    groups = np.array(patient_ids)
 
     overall_results = pd.DataFrame()
     patient_wise_results = pd.DataFrame()
@@ -538,11 +570,11 @@ def cross_validate_and_save(
     ac_patient_probs_across_folds = {}
     
     n_splits = args['n_splits']  # Number of CV folds
-    splitter = StratifiedShuffleSplit(n_splits=n_splits, test_size=0.2, random_state=args['random_state_split'])
-    #splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=40)
+    # splitter = StratifiedShuffleSplit(n_splits=n_splits, test_size=0.2, random_state=args['random_state_split'])
+    # splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=40)
+    splitter = StratifiedGroupKFold(n_splits=args['n_splits'], shuffle=True, random_state=args['random_state_split'])
 
-
-    for fold_idx, (train_idx, test_idx) in enumerate(splitter.split(unique_patients, patient_labels)):
+    for fold_idx, (train_idx, test_idx) in enumerate(splitter.split(X, y, groups)):
         torch.cuda.empty_cache()
         print("---------------")
         print(f"Starting Fold {fold_idx + 1}")
@@ -555,42 +587,49 @@ def cross_validate_and_save(
             shutil.rmtree(fold_exp_dir)
         os.makedirs(fold_exp_dir)
 
-        train_patients = unique_patients[train_idx]
-        test_patients = unique_patients[test_idx]
+        train_patients = np.unique(groups[train_idx])
+        test_patients = np.unique(groups[test_idx])
 
         # Count PD & HC in the training set
-        train_PD_count = sum(patient_labels[train_idx] == 1)
-        train_HC_count = sum(patient_labels[train_idx] == 0)
+        train_PD_count = np.sum(y[train_idx] == 1)
+        train_HC_count = np.sum(y[train_idx] == 0)
+        test_HC_count = np.sum(y[test_idx] == 0)
+        test_PD_count = np.sum(y[test_idx] == 1)
 
         print(f"Fold {fold_idx + 1}: Final Train PD={train_PD_count}, Train HC={train_HC_count}")
-        print(f"Fold {fold_idx + 1}: Test PD={sum(patient_label_map[p] for p in test_patients)}, Test HC={len(test_patients) - sum(patient_label_map[p] for p in test_patients)}")
+        print(f"Fold {fold_idx + 1}: Test PD={test_PD_count}, Test HC={test_HC_count}")
 
         # Step 5: Assign audio segments based on selected patients
-        train_indices = np.array([i for i, pid in enumerate(patient_ids) if pid in train_patients])
-        test_indices = np.array([i for i, pid in enumerate(patient_ids) if pid in test_patients])
+        # train_indices = np.array([i for i, pid in enumerate(patient_ids) if pid in train_patients])
+        # test_indices = np.array([i for i, pid in enumerate(patient_ids) if pid in test_patients])
 
         # Split the arrays using the indices
-        X_train = audio_segments[train_indices]
-        y_train = labels_np[train_indices]
-        patient_ids_train = patient_ids[train_indices]
+        X_train = X[train_idx]
+        y_train = y[train_idx]
+        patient_ids_train = groups[train_idx]
 
-        X_test = audio_segments[test_indices]
-        y_test = labels_np[test_indices]
-        test_patient_ids = patient_ids[test_indices]
+        X_test = X[test_idx]
+        y_test = y[test_idx]
+        test_patient_ids = groups[test_idx]
 
+        if args['oversampling'] == True:
+            X_train_oversampled, y_train_oversampled, train_patient_ids_oversampled, _  =  utils_audio_PD_project.oversample_training_data(X_train, y_train, patient_ids_train, domain_labels=None, GRL = False)
 
-        X_train_oversampled, y_train_oversampled, train_patient_ids_oversampled, _  =  utils_audio_PD_project.oversample_training_data(X_train, y_train, patient_ids_train, domain_labels=None, GRL = False)
+            print(f"Train labels distribution (before oversampling): {np.bincount(y_train)}")
+            print(f"Train labels distribution (after oversampling): {np.bincount(y_train_oversampled)}")
+            print(f"Test labels distribution: {np.bincount(y_test)}")
 
-        print(f"Train labels distribution (before oversampling): {np.bincount(y_train)}")
-        print(f"Train labels distribution (after oversampling): {np.bincount(y_train_oversampled)}")
-        print(f"Test labels distribution: {np.bincount(y_test)}")
+        else:
+            X_train_oversampled, y_train_oversampled, train_patient_ids_oversampled = X_train, y_train, patient_ids_train
+            print(f"Train labels distribution: {np.bincount(y_train)}")
 
 
         # First create the dataset without normalization and calculate the metrics
         train_dataset = ParkinsonAudioDataset_without_GRL(X_train_oversampled, y_train_oversampled, train_patient_ids_oversampled, n_mels=args['n_mels'], sr=args['sr'], hop_length = args['hop_length'], n_fft = args['n_fft'], win_length = args['win_length'],  normalize=False, augment = True, freq_mask = args['freq_mask'], time_mask = args['time_mask'], std=args['std'], noise = args['noise'], mixup_rate = args['mixup_rate'], augmentation_rate= args['augmentation_rate'])
         # train_dataset = dataloader.ParkinsonAudioDataset_without_GRL(X_train, y_train, patient_ids_train, n_mels=args['n_mels'], sr=args['sr'], hop_length = args['hop_length'], n_fft = args['n_fft'], win_length = args['win_length'],  normalize=False, augment = True, freq_mask = args['freq_mask'], time_mask = args['time_mask'], std=args['std'], noise = args['noise'], mixup_rate = args['mixup_rate'], augmentation_rate= args['augmentation_rate'])
         dataset_mean, dataset_std = calculate_mean_std(train_dataset, GRL = False)
-        print(dataset_mean, dataset_std)
+        
+		# print(dataset_mean, dataset_std)
         args['dataset_mean'] = dataset_mean
         args['dataset_std'] = dataset_std
 
@@ -605,17 +644,14 @@ def cross_validate_and_save(
 
 
         # Initialize a fresh model
-        audio_model_fold = audio_model
-        # audio_model_fold = models.EffNetAttention(label_dim=2, b=args['b'], pretrain=True, head_num=args['head_num'], dropout_rate=args['dropout_rate'], dropatt_rate = args['dropatt_rate'], use_efficientnetv2=args['use_efficientnetv2'])
-        # audio_model_fold = Models.ResNetAttention(label_dim=2, pretrain=True, dropatt_rate = 0.2, dropout_rate=0.2)
-        # audio_model_fold = ASTModel(label_dim=2,fstride=10, tstride=10, input_fdim=128, input_tdim=313, imagenet_pretrain=True, audioset_pretrain=True,  dropout_type="attention", mlp_dropout_p=0.2, attention_dropout_p=0.2, pretrained_models_path="/home/marcos/Documentos/GitHub/TFM_code/pretrained_models")
-        #print("ResNetAttention loaded successfully!")
+        torch.cuda.empty_cache()
+        audio_model_fold = initialize_model(args)
         audio_model_fold = audio_model_fold.to('cuda' if torch.cuda.is_available() else 'cpu')
 
         # Save original exp_dir
-        original_exp_dir = args['exp_dir']
+        # original_exp_dir = args['exp_dir']
         # Update args with fold-specific directory
-        args['exp_dir'] = fold_exp_dir
+        # args['exp_dir'] = fold_exp_dir
 
         # Train the model
         stats, val_loss, val_aucs, results_df, patient_results, patient_metrics, train_aucs, train_loss, best_model_epoch = train_without_GRL(audio_model_fold, train_loader, test_loader, args)
@@ -636,7 +672,7 @@ def cross_validate_and_save(
         )
 
         # Restore original exp_dir for next fold
-        args['exp_dir'] = original_exp_dir
+        # args['exp_dir'] = original_exp_dir
 
         # Append fold results to overall DataFrames
         patient_results['fold'] = fold_idx + 1
