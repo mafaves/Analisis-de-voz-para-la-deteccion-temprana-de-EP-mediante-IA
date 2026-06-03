@@ -126,7 +126,8 @@ class SklearnTrainer:
         Returns:
             dict: Training results with segment and patient-level metrics.
         """
-        from .cross_validation import StratifiedGroupKFold
+        # from .cross_validation import StratifiedGroupKFold
+        from sklearn.model_selection import StratifiedGroupKFold
 
         cv = StratifiedGroupKFold(n_splits=self.n_splits, random_state=self.random_state, shuffle=True)
 
@@ -196,7 +197,8 @@ class SklearnTrainer:
 
                 inner_cv = StratifiedGroupKFold(
                     n_splits=self.inner_cv,
-                    random_state=self.random_state + fold
+                    random_state=self.random_state + fold,
+                    shuffle=True
                 )
 
                 inner_cv_splits = []
