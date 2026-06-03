@@ -15,7 +15,7 @@ import pandas as pd
 import shutil
 from utilities import *
 from dataloader.audio_dataset_class import *
-from sklearn.model_selection import StratifiedShuffleSplit, StratifiedGroupKFold
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.metrics import confusion_matrix 
 
 def compute_class_weights(labels):
