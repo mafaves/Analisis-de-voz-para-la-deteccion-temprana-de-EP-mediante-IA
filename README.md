@@ -12,7 +12,7 @@ La base de datos consta de cuatro grupos de pacientes:
 |-------|-------------|----------|
 | HC | Healthy Control (control sano) | 0 |
 | NFC | Negative Family Carrier (portador familiar negativo) | 0 |
-| AC | Asymptomatic Carrier (portador asintomático de la mutación G2019S LRRK2) | 1 |
+| AC | Asymptomatic Carrier (portador asintomático de la mutación G2019S **LRRK2**) | 1 |
 | PD | Parkinson's Disease | 2 |
 
 NFC se trata como HC a efectos de clasificación binaria.
