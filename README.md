@@ -1,222 +1,34 @@
-# Voice Analysis for Parkinson's Disease Detection
+# Análisis de Voz para la Detección de la Enfermedad de Parkinson
 
-Master's Thesis Code Repository - TFM_code
+Código del Trabajo de Fin de Máster — TFM_code
 
-## Overview
+## Descripción
 
-This repository contains code for analyzing voice recordings to detect Parkinson's Disease (PD) and classify disease stages. The code compares Machine Learning (ML) and Deep Learning (DL) approaches.
+Este repositorio contiene el código para analizar grabaciones de voz y detectar la enfermedad de Parkinson (PD), así como clasificar distintos estadios. Se comparan enfoques de Machine Learning (ML) y Deep Learning (DL).
 
-## Key Features
+La base de datos consta de cuatro grupos de pacientes:
 
-- **Patient-level cross-validation**: Uses `StratifiedGroupKFold` to prevent data leakage — all audio clips from the same patient are in either train OR test, never both
-- **Multiple feature extractors**: OpenSMILE, Praat (Parselmouth), Librosa
-- **ML models**: Random Forest, SVM, XGBoost
-- **DL models**: CNN, Bi-LSTM, ResNet, EfficientNet, Audio Spectrogram Transformer
+| Grupo | Descripción | Etiqueta |
+|-------|-------------|----------|
+| HC | Healthy Control (control sano) | 0 |
+| NFC | Negative Family Carrier (portador familiar negativo) | 0 |
+| AC | Asymptomatic Carrier (portador asintomático de la mutación G2019S LRRK2) | 1 |
+| PD | Parkinson's Disease | 2 |
 
-## Directory Structure
+NFC se trata como HC a efectos de clasificación binaria.
 
-```
-TFM_code/
-├── src/
-│   ├── data/              # Data loading
-│   │   └── humv_loader.py
-│   │
-│   ├── preprocessing/    # Audio preprocessing
-│   │   ├── audio_processor.py
-│   │   └── splitter.py      # Patient-level splitting
-│   │
-│   ├── features/       # Feature extraction
-│   │   ├── opensmile.py
-│   │   ├── praat.py
-│   │   └── librosa_features.py
-│   │
-│   ├── models/       # Model definitions
-│   │   ├── pytorch/   # DL models
-│   │   └── sklearn/   # ML models
-│   │
-│   ├── training/   # Training pipelines
-│   │   ├── cross_validation.py
-│   │   ├── sklearn_trainer.py
-│   │   └── pytorch_trainer.py
-│   │
-│   ├── dataset/    # PyTorch Datasets
-│   │   └── audio_dataset.py
-│   │
-│   └── utils/     # Utilities
-│
-├── data/        # Data (gitignored)
-└── outputs/    # Results (gitignored)
-```
+## Estructura de los datos de audio
 
-## Installation
-
-```bash
-pip install -r requirements.txt
-```
-
-## Quick Start
-
-### 1. Load Audio Data
-
-```python
-from src.data import load_audio_data
-
-df = load_audio_data(
-    root_directory='/path/to/audio/files',
-    start_with='vocal'  # Filter files starting with 'vocal'
-)
-
-print(f"Loaded {len(df)} audio files")
-print(df['Label'].value_counts())
-```
-
-### 2. Preprocess Audio
-
-```python
-from src.preprocessing import execute_preprocess_and_split
-
-audio_chunks, labels, patient_ids = execute_preprocess_and_split(
-    df,
-    chunk_duration=5,      # 5-second chunks
-    target_sr=16000,       # 16 kHz
-    remove_silence=True
-)
-
-print(f"Generated {len(audio_chunks)} chunks")
-```
-
-### 3. Extract Features
-
-```python
-from src.features import extract_opensmile_features
-
-features_df = extract_opensmile_features(
-    audio_chunks,
-    labels,
-    patient_ids
-)
-```
-
-### 4. Train ML Model (with patient-level CV)
-
-```python
-from src.models.sklearn import SVMClassifier
-from src.training import SklearnTrainer
-from src.preprocessing.splitter import get_patient_labels
-
-# Get patient IDs and labels
-patient_ids_unique, patient_labels = get_patient_labels(patient_ids, labels)
-
-# Prepare features
-X = features_df.drop(columns=['patient_id', 'label']).values
-y = features_df['label'].values
-
-# Train with CV
-model = SVMClassifier(kernel='rbf', C=1.0)
-trainer = SklearnTrainer(model=model, n_splits=5)
-
-results = trainer.train(X, y, patient_ids)
-```
-
-### 5. Train DL Model
-
-```python
-from src.models.pytorch import CNN2D
-from src.dataset import ParkinsonAudioDataset
-from src.training import PyTorchTrainer
-from torch.utils.data import DataLoader
-
-dataset = ParkinsonAudioDataset(audio_chunks, labels, patient_ids)
-train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-model = CNN2D(num_classes=2)
-trainer = PyTorchTrainer(model=model, n_epochs=50)
-
-history = trainer.train(train_loader)
-```
-
-## Data Leakage Prevention
-
-**CRITICAL**: This codebase uses patient-level splitting to prevent data leakage.
-
-```python
-from src.preprocessing.splitter import split_by_patients
-
-for train_idx, test_idx in split_by_patients(patient_ids, labels, n_splits=5):
-    train_patients = set(patient_ids[train_idx])
-    test_patients = set(patient_ids[test_idx])
-    
-    # This will raise an assertion error if there's leakage
-    assert train_patients.isdisjoint(test_patients), "LEAKAGE DETECTED!"
-```
-
-## Feature Extractors
-
-| Feature Set | Description | Use Case |
-|------------|-------------|----------|
-| OpenSMILE | ComParE 2016, eGeMAPS | Standard acoustic features |
-| Praat | Pitch, formants, jitter, shimmer, HNR | Phonatory features |
-| Librosa | MFCCs, spectral contrast | Timbre features |
-
-## Model Comparison
-
-### ML Models (sklearn)
-
-- **Random Forest**: Robust ensemble method
-- **SVM**: Good for high-dimensional features
-- **XGBoost**: Gradient boosting
-
-### DL Models (PyTorch)
-
-- **CNN1D**: Raw waveform classification
-- **CNN2D**: Spectrogram classification
-- **Bi-LSTM**: Temporal modeling
-- **ResNet/EfficientNet**: Transfer learning from ImageNet
-- **AST**: Audio Spectrogram Transformer
-
-## Results
-
-Patient-wise metrics are calculated by aggregating audio-level predictions:
-
-```python
-from src.training.metrics import calculate_patient_wise_metrics
-
-patient_results, metrics = calculate_patient_wise_metrics(results_df)
-
-print(f"Patient-wise AUC: {metrics['auc']:.3f}")
-print(f"Patient-wise Accuracy: {metrics['accuracy']:.3f}")
-```
-
-## Common Workflows
-
-### HC vs PD Classification
-
-```python
-# Filter to binary classification (HC=0 vs PD=1)
-from src.data import load_audio_data, filter_binary
-
-df = load_audio_data(root_directory)
-df_binary = filter_binary(df, labels_to_keep=[0, 2])  # 0=HC, 2=PD -> 0, 1
-```
-
-### Multi-class (HC vs AC vs PD)
-
-```python
-# Keep all three classes
-from src.data import load_audio_data
-
-df = load_audio_data(root_directory)
-# Labels: HC=0, NFC=0, AC=1, PD=2
-```
-
-## Data Directory Structure
+Los audios originales deben organizarse en `data/raw/` siguiendo esta estructura:
 
 ```
-root/
+data/raw/
 ├── HC/
 │   └── HUMV_HC_001/
 │       └── vocal.wav
 ├── NFC/
+│   └── HUMV_NFC_001/
+│       └── vocal.wav
 ├── AC/
 │   └── HUMV_AC_001/
 │       └── vocal.wav
@@ -225,25 +37,183 @@ root/
         └── vocal.wav
 ```
 
-## Requirements
+Cada paciente tiene su propia carpeta con uno o varios archivos de audio (p. ej., `vocal.wav`). La función `humv_loader.load_audio_data()` recorre esta estructura y devuelve un DataFrame con las columnas:
 
-See `requirements.txt`
+- `Patient`: ID del paciente (ej. `HUMV_PD_001`).
+- `Label`: etiqueta numérica (0, 1, 2).
+- `File_Path`: ruta completa al archivo de audio.
+- `Audio_Name`: nombre del archivo sin extensión.
 
-## Author
+## Flujo de trabajo
 
-Marcos Aguilella  
-IDIVAL  
-marcos.aguilella@idival.org
+### 0. Preprocesado inicial (opcional)
 
-## Citation
+Estos notebooks se encuentran en `src/utilities/` y solo es necesario ejecutarlos una vez:
 
-If you use this code in your research, please cite:
+- **`DeepFilter_code.ipynb`** — Filtrar ruido de los audios mediante [DeepFilterNet](https://github.com/rikorose/deepfilternet).
+- **`Metadata_analysis_clean.ipynb`** — Analizar variables demográficas (edad, sexo, años de educación) para validar la homogeneidad entre grupos.
+
+### 1. Generar fragmentos de audio (chunks)
+
+**Notebook:** `src/data/save_pre_processed_data.ipynb`
+
+Los audios originales suelen ser largos. Para acelerar el entrenamiento, se dividen en fragmentos más cortos (5s o 10s, con o sin solapamiento de 1 s).
+
+```python
+from preprocessing import audio_processor
+
+audio_chunks, labels, patient_ids, exercises = audio_processor.execute_preprocess_and_split(
+    df, start_time=0, chunk_duration=5, max_duration=15,
+    target_sr=16000, remove_silence=True, top_db=20, overlap = 0
+)
+```
+
+Los resultados se guardan como archivos `.npy` en `data/processed/`:
 
 ```
-@MastersThesis{aguilella2024,
-  author = {Marcos Aguilella},
-  title = {Voice Analysis for Parkinson's Disease Detection},
+data/processed/
+├── 5s_with_1s_overlap_16kHz_top_db_20/
+├── 5s_with_no_overlap_16kHz_top_db_20/
+├── 10s_with_1s_overlap_16kHz_top_db_20/
+└── 10s_with_no_overlap_16kHz_top_db_20/
+```
+
+Esto evita tener que reprocesar los audios cada vez.
+
+### 2. Cargar datos preprocesados
+
+**Módulo:** `src/data/load_preprocessed_data.py`
+
+```python
+from data.load_preprocessed_data import load_preprocessed_data
+
+data_dict = load_preprocessed_data(
+    processed_folder='data/processed/5s_with_1s_overlap_16kHz_top_db_20',
+    pattern_type='audio_segments_5s_with_1s_overlap_*.npy'
+)
+# Devuelve un dict con: audio_segments, labels, patient_ids, exercises
+```
+
+### 3. Extraer características (solo para ML)
+
+Para modelos ML se extraen features con alguno de los siguientes extractores en `src/features/`:
+
+| Extractor | Descripción |
+|-----------|-------------|
+| **OpenSMILE** | ComParE 2016, eGeMAPS — características acústicas estándar |
+| **Praat** | Pitch, formantes, jitter, shimmer, HNR — características fonatorias |
+| **Librosa** | MFCCs, contraste espectral — características de timbre |
+
+Para Deep Learning los chunks de audio se pasan directamente y el dataloader (`src/dataloader/audio_dataset_class.py`) genera espectrogramas Mel sobre la marcha.
+
+### 4. Entrenar modelos
+
+#### Machine Learning
+
+**Notebook:** `src/run_ML_models.ipynb`
+
+Modelos disponibles:
+- **Random Forest**: conjunto de árboles de decisión
+- **SVM**: máquina de vectores de soporte
+- **XGBoost**: gradiente potenciado
+
+Usa `SklearnTrainer` de `src/training/sklearn_trainer.py` que implementa validación cruzada con `StratifiedGroupKFold` para evitar fuga de datos.
+
+#### Deep Learning
+
+**Notebook:** `src/run_DL_models.ipynb`
+
+Modelos disponibles en `src/models/`:
+- **CNN / Bi-LSTM**: redes convolucionales y recurrentes clásicas
+- **ResNet, EfficientNet**: transfer learning desde ImageNet
+- **AST (Audio Spectrogram Transformer)**: transformer aplicado a espectrogramas
+
+Arquitecturas definidas en:
+- `Models.py` — CNN1D, CNN2D, Bi-LSTM
+- `HigherModels.py` — ResNet, EfficientNet
+- `ast_models.py` — Audio Spectrogram Transformer
+
+### Prevención de fuga de datos (data leakage)
+
+Todos los splits de train/test se hacen a nivel de paciente. El `StratifiedGroupKFold` de sklearn (con grupos = patient_ids) asegura que ningún paciente aparezca simultáneamente en train y test, lo cual es crítico en datos médicos con múltiples grabaciones por paciente.
+
+```python
+from sklearn.model_selection import StratifiedGroupKFold
+
+cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+for train_idx, test_idx in cv.split(X, y, groups=patient_ids):
+    ...
+```
+
+## Métricas
+
+Las predicciones a nivel de fragmento se agregan a nivel de paciente mediante `calculate_patient_wise_metrics()` en `src/utilities/stats.py`. Se calculan:
+
+- Accuracy, precisión, recall, F1-score
+- AUC-ROC
+- Matriz de confusión
+
+## Instalación
+
+```bash
+pip install -r requirements.txt
+```
+
+## Estructura del repositorio
+
+```
+TFM_code/
+├── src/
+│   ├── data/              # Carga de datos
+│   │   ├── humv_loader.py
+│   │   └── load_preprocessed_data.py
+│   ├── preprocessing/     # División en fragmentos
+│   │   └── audio_processor.py
+│   ├── features/          # Extracción de características
+│   │   ├── opensmile.py
+│   │   ├── praat.py
+│   │   └── librosa_features.py
+│   ├── models/            # Definición de modelos
+│   │   ├── Models.py
+│   │   ├── HigherModels.py
+│   │   ├── ast_models.py
+│   │   └── sklearn/       # Wrappers sklearn
+│   ├── dataloader/        # Dataset PyTorch
+│   │   └── audio_dataset_class.py
+│   ├── training/          # Pipelines de entrenamiento
+│   │   └── sklearn_trainer.py
+│   ├── utilities/         # Utilidades (stats, notebooks auxiliares)
+│   ├── analysis/          # Resumen de resultados
+│   ├── run_ML_models.ipynb
+│   ├── run_DL_models.ipynb
+│   └── traintest_without_GRL.py
+├── data/
+│   ├── raw/               # Audios originales (gitignored)
+│   ├── processed/         # Audios fragmentados (gitignored)
+│   └── features/          # Features extraídas (gitignored)
+└── outputs/
+    └── experiments/       # Resultados de experimentos (gitignored)
+```
+
+## Resultados
+
+Los resultados de cada experimento se guardan en `outputs/experiments/` con la estructura de carpetas `<comparacion>/<modelo>/`. Para consultar un resumen, usar `src/analysis/summary.py`.
+
+## Autor
+
+Marcos Aguilella\
+IDIVAL\
+marcos.aguilella@idival.org
+
+## Citación
+
+Si usas este código en tu investigación, por favor cita:
+
+```
+@MastersThesis{aguilella2026,
+  author = {Marcos Aguilella Fabregat},
+  title = {Voice Analysis using Artificial Intelligence for the early diagnosis of Parkinson's disease associated with **LRKK2** mutation},
   school = {IDIVAL},
-  year = {2024}
+  year = {2026}
 }
 ```
