@@ -12,7 +12,7 @@ La base de datos consta de cuatro grupos de pacientes:
 |-------|-------------|----------|
 | HC | Healthy Control (control sano) | 0 |
 | NFC | Negative Family Carrier (portador familiar negativo) | 0 |
-| AC | Asymptomatic Carrier (portador asintomático de la mutación G2019S **LRRK2**) | 1 |
+| AC | Asymptomatic Carrier (portador asintomático de la mutación G2019S *LRRK2*) | 1 |
 | PD | Parkinson's Disease | 2 |
 
 NFC se trata como HC a efectos de clasificación binaria.
@@ -212,7 +212,7 @@ Si usas este código en tu investigación, por favor cita:
 ```
 @MastersThesis{aguilella2026,
   author = {Marcos Aguilella Fabregat},
-  title = {Voice Analysis using Artificial Intelligence for the early diagnosis of Parkinson's disease associated with **LRKK2** mutation},
+  title = {Voice Analysis using Artificial Intelligence for the early diagnosis of Parkinson's disease associated with *LRRK2* mutation},
   school = {IDIVAL},
   year = {2026}
 }
