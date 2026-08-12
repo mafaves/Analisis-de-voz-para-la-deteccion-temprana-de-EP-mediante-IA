@@ -243,9 +243,9 @@ def train_without_GRL(audio_model, train_loader, val_loader, args):
     #loss_fn = nn.BCEWithLogitsLoss() if args['loss'] == 'BCE' else nn.CrossEntropyLoss()
 
     if args['loss'] == 'BCE':
-        loss_fn = nn.BCEWithLogitsLoss(pos_weight=class_weights[1], label_smoothing = 0.1)  # For binary classification
+        loss_fn = nn.BCEWithLogitsLoss(pos_weight=class_weights[1])  # For binary classification , label_smoothing = 0.1
     else:
-        loss_fn = nn.CrossEntropyLoss(weight=class_weights, label_smoothing = 0.1)  # For multi-class classification
+        loss_fn = nn.CrossEntropyLoss(weight=class_weights)  # For multi-class classification label_smoothing = 0.1)
 
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer,
                                                list(range(args['lrscheduler_start'],
