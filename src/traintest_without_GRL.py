@@ -439,13 +439,13 @@ def train_without_GRL(audio_model, train_loader, val_loader, args):
         best_model_epoch = -1
 
     if CV==False:
-        save_experiment_results(exp_dir=args['exp_dir'], train_loss=train_loss, val_loss=val_loss, train_aucs=train_aucs, val_aucs=val_aucs, results_df=results_df, patient_results=patient_results, patient_metrics=patient_metrics, audio_model=audio_model, optimizer=optimizer, args=args, best_epoch=best_model_epoch if args.get('save_best_model', False) else -1
+        save_experiment_results(exp_dir=args['exp_dir'], train_loss=train_loss, val_loss=val_loss, train_aucs=train_aucs, val_aucs=val_pm_aucs, results_df=results_df, patient_results=patient_results, patient_metrics=patient_metrics, audio_model=audio_model, optimizer=optimizer, args=args, best_epoch=best_model_epoch if args.get('save_best_model', False) else -1
     )
     
     final_time = time.time() - start_time
     print(f"\nTraining completed in {final_time/60:.2f} minutes")
     
-    return stats, val_loss, val_aucs, results_df, patient_results, patient_metrics, train_aucs, train_loss, best_model_epoch
+    return stats, val_loss, val_pm_aucs, results_df, patient_results, patient_metrics, train_aucs, train_loss, best_model_epoch
 
 
 # Validation function
