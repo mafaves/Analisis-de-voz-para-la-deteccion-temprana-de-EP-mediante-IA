@@ -28,7 +28,7 @@ class ResNetAttention(nn.Module):
             2048,
             label_dim,
             att_activation='sigmoid',
-            cla_activation='sigmoid',
+            cla_activation='linear',
             dropatt_rate = dropatt_rate)
         self.avgpool = nn.AvgPool2d((4, 1))
 
