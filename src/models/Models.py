@@ -106,7 +106,7 @@ class EffNetAttention(nn.Module):
                 self.middim[b],
                 label_dim,
                 att_activation='sigmoid',
-                cla_activation='sigmoid',
+                cla_activation='linear',
                 dropatt_rate = dropatt_rate)
         # single-head attention pooling
         elif head_num == 1:
@@ -115,7 +115,7 @@ class EffNetAttention(nn.Module):
                 self.middim[b],
                 label_dim,
                 att_activation='sigmoid',
-                cla_activation='sigmoid')
+                cla_activation='linear')
         # mean pooling (no attention)
         elif head_num == 0:
             print('Model with mean pooling (NO Attention Heads)')
@@ -123,7 +123,7 @@ class EffNetAttention(nn.Module):
                 self.middim[b],
                 label_dim,
                 att_activation='sigmoid',
-                cla_activation='sigmoid')
+                cla_activation='linear')
         else:
             raise ValueError('Attention head must be integer >= 0, 0=mean pooling, 1=single-head attention, >1=multi-head attention.')
 
