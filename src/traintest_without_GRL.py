@@ -379,9 +379,11 @@ def train_without_GRL(audio_model, train_loader, val_loader, args):
         
         # Determine current metric value
         if args['monitor_metric'] == 'val_acc':
-            current_metric = stats[0]['accuracy'] if stats else 0
+            current_metric = test_acc
+        elif args['monitor_metric'] == 'val_pm_auc':
+            current_metric = test_pm_AUC
         elif args['monitor_metric'] == 'val_pm_acc':
-            current_metric = patient_metrics['accuracy']
+            current_metric = test_pm_acc
         else:  # val_loss
             current_metric = val_loss_epoch
 
