@@ -410,25 +410,26 @@ def train_without_GRL(audio_model, train_loader, val_loader, args):
 
         # Check for improvement
         is_better = False
-        if args['monitor_metric'] == 'val_loss':
-            if current_metric < (best_metric - args['min_delta']):
-                is_better = True
-        else:  # For AUC metrics (higher is better)
-            if current_metric > (best_metric + args['min_delta']):
-                is_better = True
+        if epoch >= skip_epochs:
+            if args['monitor_metric'] == 'val_loss':
+                if current_metric < (best_metric - args['min_delta']):
+                    is_better = True
+            else:  # For AUC and acc metrics (higher is better)
+                if current_metric > (best_metric + args['min_delta']):
+                    is_better = True
 
-        # Update best metric and check early stopping
-        if is_better:
-            best_metric = current_metric
-            best_epoch_early_stop = epoch
-            early_stop_counter = 0
-        else:
-            early_stop_counter += 1
-            if early_stop_counter >= args['early_stop_patience']:
-                print(f"\nEarly stopping triggered at epoch {epoch+1}!")
-                print(f"No improvement for {args['early_stop_patience']} epochs")
-                print(f"Best {args['monitor_metric']}: {best_metric:.4f} at epoch {best_epoch_early_stop+1}")
-                break
+            # Update best metric and check early stopping
+            if is_better:
+                best_metric = current_metric
+                best_epoch_early_stop = epoch
+                early_stop_counter = 0
+            else:
+                early_stop_counter += 1
+                if early_stop_counter >= args['early_stop_patience']:
+                    print(f"\nEarly stopping triggered at epoch {epoch+1}!")
+                    print(f"No improvement for {args['early_stop_patience']} epochs")
+                    print(f"Best {args['monitor_metric']}: {best_metric:.4f} at epoch {best_epoch_early_stop+1}")
+                    break
 
         epoch += 1
 
