@@ -384,6 +384,8 @@ def train_without_GRL(audio_model, train_loader, val_loader, args):
             current_metric = test_pm_AUC
         elif args['monitor_metric'] == 'val_pm_acc':
             current_metric = test_pm_acc
+        elif args['monitor_metric'] == 'val_auc':
+            current_metric = test_AUC
         else:  # val_loss
             current_metric = val_loss_epoch
 
