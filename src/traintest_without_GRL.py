@@ -612,6 +612,14 @@ def cross_validate_and_save(
         y_test = y[test_idx]
         test_patient_ids = groups[test_idx]
 
+
+        train_dataset = ParkinsonAudioDataset_without_GRL(X_train, y_train, patient_ids_train, n_mels=args['n_mels'], sr=args['sr'], hop_length = args['hop_length'], n_fft = args['n_fft'], win_length = args['win_length'],  normalize=False, augment = False, freq_mask = args['freq_mask'], time_mask = args['time_mask'], std=args['std'], noise = args['noise'], mixup_rate = args['mixup_rate'], augmentation_rate= args['augmentation_rate'])
+
+        dataset_mean, dataset_std = calculate_mean_std(train_dataset, GRL = False)
+        # print(dataset_mean, dataset_std)
+        args['dataset_mean'] = dataset_mean
+        args['dataset_std'] = dataset_std
+
         if args['oversampling'] == True:
             X_train_oversampled, y_train_oversampled, train_patient_ids_oversampled, _  =  utils_audio_PD_project.oversample_training_data(X_train, y_train, patient_ids_train, domain_labels=None, GRL = False)
 
@@ -625,13 +633,13 @@ def cross_validate_and_save(
 
 
         # First create the dataset without normalization and calculate the metrics
-        train_dataset = ParkinsonAudioDataset_without_GRL(X_train_oversampled, y_train_oversampled, train_patient_ids_oversampled, n_mels=args['n_mels'], sr=args['sr'], hop_length = args['hop_length'], n_fft = args['n_fft'], win_length = args['win_length'],  normalize=False, augment = True, freq_mask = args['freq_mask'], time_mask = args['time_mask'], std=args['std'], noise = args['noise'], mixup_rate = args['mixup_rate'], augmentation_rate= args['augmentation_rate'])
+        # train_dataset = ParkinsonAudioDataset_without_GRL(X_train_oversampled, y_train_oversampled, train_patient_ids_oversampled, n_mels=args['n_mels'], sr=args['sr'], hop_length = args['hop_length'], n_fft = args['n_fft'], win_length = args['win_length'],  normalize=False, augment = True, freq_mask = args['freq_mask'], time_mask = args['time_mask'], std=args['std'], noise = args['noise'], mixup_rate = args['mixup_rate'], augmentation_rate= args['augmentation_rate'])
         # train_dataset = dataloader.ParkinsonAudioDataset_without_GRL(X_train, y_train, patient_ids_train, n_mels=args['n_mels'], sr=args['sr'], hop_length = args['hop_length'], n_fft = args['n_fft'], win_length = args['win_length'],  normalize=False, augment = True, freq_mask = args['freq_mask'], time_mask = args['time_mask'], std=args['std'], noise = args['noise'], mixup_rate = args['mixup_rate'], augmentation_rate= args['augmentation_rate'])
-        dataset_mean, dataset_std = calculate_mean_std(train_dataset, GRL = False)
+        # dataset_mean, dataset_std = calculate_mean_std(train_dataset, GRL = False)
         
-        # print(dataset_mean, dataset_std)
-        args['dataset_mean'] = dataset_mean
-        args['dataset_std'] = dataset_std
+        # # print(dataset_mean, dataset_std)
+        # args['dataset_mean'] = dataset_mean
+        # args['dataset_std'] = dataset_std
 
         # Now create the dataset with normalization
         # train_dataset = dataloader.ParkinsonAudioDataset_without_GRL(X_train, y_train, patient_ids_train, n_mels=args['n_mels'], sr=args['sr'], hop_length = args['hop_length'], n_fft = args['n_fft'], win_length = args['win_length'], augment = True, normalize=True, transpose = True, norm_mean=dataset_mean, norm_std=dataset_std, freq_mask = args['freq_mask'], time_mask = args['time_mask'], std = args['std'], noise = args['noise'], mixup_rate = args['mixup_rate'], augmentation_rate = args['augmentation_rate'])
