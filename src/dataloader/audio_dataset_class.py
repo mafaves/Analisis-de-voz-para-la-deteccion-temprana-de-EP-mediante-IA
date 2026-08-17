@@ -1,3 +1,5 @@
+from unittest import loader
+
 import torch
 import torchaudio
 import librosa
@@ -27,17 +29,29 @@ def calculate_mean_std(dataset, batch_size=32, GRL = False):
 	# Create a DataLoader for the dataset to loop through it
 	loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-	for mel_tensor, _ , _ in loader:
-		cur_mean = torch.mean(mel_tensor)
-		cur_std = torch.std(mel_tensor)
-		mean.append(cur_mean.item())
-		std.append(cur_std.item())
 
-	# Calculate the overall mean and std for the dataset
-	dataset_mean = np.mean(mean)
-	dataset_std = np.mean(std)
+	total_sum = 0.0
+	total_squared_sum = 0.0
+	total_count = 0
 
-	return dataset_mean, dataset_std
+	for mel_tensor, _, _ in loader:
+
+		mel_tensor = mel_tensor.float()
+
+		total_sum += mel_tensor.sum().item()
+		total_squared_sum += (mel_tensor ** 2).sum().item()
+		total_count += mel_tensor.numel()
+
+	mean = total_sum / total_count
+
+	variance = (
+		total_squared_sum / total_count
+		- mean ** 2
+	)
+
+	std = np.sqrt(variance)
+
+	return mean, std
 
 
 class ParkinsonAudioDataset_without_GRL(Dataset):
