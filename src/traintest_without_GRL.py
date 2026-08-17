@@ -779,9 +779,14 @@ def cross_validate_and_save(
         # Calculate the mean of the metrics
         mean_metrics_AC = fold_AC_metrics_df.mean(numeric_only=True).to_dict()
         #mean_metrics_AC['fold'] = 'Mean' # Add a label for the mean row
+        
+        # Calculate the std of the metrics (across folds)
+        std_metrics_AC = fold_AC_metrics_df.std(numeric_only=True).to_dict()
+
 
         fold_AC_metrics_df = pd.concat([fold_AC_metrics_df, pd.DataFrame([mean_metrics_AC])], ignore_index=True)
-        
+        fold_AC_metrics_df = pd.concat([fold_AC_metrics_df, pd.DataFrame([std_metrics_AC])], ignore_index=True)
+
         # Add AC patient probability columns (alphabetically sorted)
         if ac_patient_probs_across_folds:
             # Sort patient IDs alphabetically
@@ -796,6 +801,8 @@ def cross_validate_and_save(
                 # Add mean probability for the last row (mean row)
                 mean_prob = np.mean(probs)
                 fold_AC_metrics_df.at[len(probs), patient_id] = mean_prob
+                std_prob = np.std(probs)
+                fold_AC_metrics_df.at[len(probs) + 1, patient_id] = std_prob
         
         fold_AC_metrics_df.to_csv(fold_AC_metrics_path, index=False, sep = "\t", decimal= ",")
 
@@ -803,8 +810,17 @@ def cross_validate_and_save(
     mean_metrics = fold_metrics_df.mean(numeric_only=True).to_dict()
     mean_metrics['fold'] = 'Mean' # Add a label for the mean row
 
+        # Calculate the std of the metrics (across folds, before mean row is appended)
+    std_metrics = fold_metrics_df.std(numeric_only=True).to_dict()
+    std_metrics.pop('fold', None)   # fold numbers are numeric on fold rows
+    std_metrics['fold'] = 'Std'
+
+
     # Append the mean row to the DataFrame
     fold_metrics_df = pd.concat([fold_metrics_df, pd.DataFrame([mean_metrics])], ignore_index=True)
+    # Append the std row
+    fold_metrics_df = pd.concat([fold_metrics_df, pd.DataFrame([std_metrics])], ignore_index=True)
+
 
     fold_metrics_df.to_csv(fold_metrics_path, index=False, sep = "\t", decimal= ",")
     # print(f"Cross-validation metrics saved to {fold_metrics_path}")
